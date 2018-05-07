@@ -177,10 +177,11 @@ class AddByConstOp(Op):
         return [output_grad]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return broadcast_rule(input_shapes[0], (1,))
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_elemwise_add_by_const(
+                input_shapes[0], self.const_attr, tgt, tgt_host, "elem_add_const")
 
 class MulOp(Op):
     def __call__(self, node_A, node_B):

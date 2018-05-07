@@ -130,8 +130,8 @@ def test_conv2d():
       N, C, H, W = X.shape
       assert (H + 2 * padding - filter_H) % stride == 0
       assert (W + 2 * padding - filter_W) % stride == 0
-      out_H = (H + 2 * padding - filter_H) / stride + 1
-      out_W = (W + 2 * padding - filter_W) / stride + 1
+      out_H = int((H + 2 * padding - filter_H) / stride + 1)
+      out_W = int((W + 2 * padding - filter_W) / stride + 1)
 
       y_row_size = C * filter_H * filter_W
       y_col_size = out_H * out_W
@@ -140,8 +140,8 @@ def test_conv2d():
 
       for batch_index in range(N):
         for col_index in range(y_col_size):
-          out_y = col_index / out_W
-          out_x = col_index % out_W
+          out_y = int(col_index / out_W)
+          out_x = int(col_index % out_W)
           in_y = out_y * stride - padding
           in_x = out_x * stride - padding
           row_idx = 0
@@ -161,8 +161,8 @@ def test_conv2d():
         N, C, H, W = X.shape
         assert (H + 2 * padding - filter_H) % stride == 0
         assert (W + 2 * padding - filter_W) % stride == 0
-        out_H = (H + 2 * padding - filter_H) / stride + 1
-        out_W = (W + 2 * padding - filter_W) / stride + 1
+        out_H = int((H + 2 * padding - filter_H) / stride + 1)
+        out_W = int((W + 2 * padding - filter_W) / stride + 1)
 
         im2col_matrix = im2col(X, filter_H, filter_W, padding, stride)
         filter_matrix = Filter.reshape(filter_outChannel, -1)
