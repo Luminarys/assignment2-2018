@@ -181,7 +181,7 @@ class AddByConstOp(Op):
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         return tvm_op.make_elemwise_add_by_const(
-                input_shapes[0], self.const_attr, tgt, tgt_host, "elem_add_const")
+                input_shapes[0], node.const_attr, tgt, tgt_host, "elem_add_const")
 
 class MulOp(Op):
     def __call__(self, node_A, node_B):
@@ -200,10 +200,11 @@ class MulOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """Need to handle input_vals[0].shape != input_vals[1].shape"""
-        """TODO: Your code here"""
+        return broadcast_rule(input_shapes[0], input_shapes[1])
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_elemwise_mul(
+            input_shapes[0], tgt, tgt_host, "elem_mul")
 
 class MulByConstOp(Op):
     def __call__(self, node_A, const_val):
@@ -221,10 +222,11 @@ class MulByConstOp(Op):
         return [node.const_attr * output_grad]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return broadcast_rule(input_shapes[0], (1,))
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_elemwise_mul_by_const(
+                input_shapes[0], node.const_attr, tgt, tgt_host, "elem_mul_const")
 
 class MatMulOp(Op):
     def __call__(self, node_A, node_B, trans_A=False, trans_B=False):
@@ -271,11 +273,24 @@ class MatMulOp(Op):
         return [lhs_grad, rhs_grad]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        if ((node.matmul_attr_trans_A is False) and
+                (node.matmul_attr_trans_B is False)):
+            return (input_shapes[0][0], input_shapes[1][1])
+        elif ((node.matmul_attr_trans_A is True) and
+                (node.matmul_attr_trans_B is False)):
+            return (input_shapes[0][1], input_shapes[1][1])
+        elif ((node.matmul_attr_trans_A is False) and
+                (node.matmul_attr_trans_B is True)):
+            return (input_shapes[0][0], input_shapes[1][0])
+        elif ((node.matmul_attr_trans_A is True) and
+                (node.matmul_attr_trans_B is True)):
+            return (input_shapes[0][1], input_shapes[1][0])
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
-        
+        return tvm_op.make_matrix_mul(
+                input_shapes[0], node.matmul_attr_trans_A,
+                input_shapes[1], node.matmul_attr_trans_B,
+                tgt, tgt_host, "matmul")
 
 class PlaceholderOp(Op):
     def __call__(self):
@@ -313,7 +328,9 @@ class ZerosLikeOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """If input_shape is a vector, simpler to return (1,)"""
-        """TODO: Your code here"""
+        if isinstance(input_shapes[0], int):
+            return (1,)
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         return None
@@ -337,7 +354,9 @@ class OnesLikeOp(Op):
 
     def infer_shape(self, node, input_shapes):
         """If input_shape is a vector, simpler to return (1,)"""
-        """TODO: Your code here"""
+        if isinstance(input_shapes[0], int):
+            return (1,)
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
         return None
@@ -395,10 +414,10 @@ class BroadcastToOp(Op):
         return [grad_A, grad_B]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return input_shapes[1]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_broadcast_to(input_shapes[0], input_shapes[1], tgt, tgt_host, "broadcast_to")
 
 def softmax_func(y):
     """Numerically stable softmax."""
@@ -428,10 +447,10 @@ class SoftmaxCrossEntropyOp(Op):
         return [grad_A, grad_B]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return (1,)
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_matrix_softmax_cross_entropy(input_shapes[0], tgt, tgt_host, "softmax cross ent.")
 
 class SoftmaxOp(Op):
     def __call__(self, node_A):
@@ -450,10 +469,10 @@ class SoftmaxOp(Op):
         raise NotImplementedError
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_matrix_softmax(input_shapes[0], tgt, tgt_host, "softmax")
 
 
 class ReluOp(Op):
@@ -470,10 +489,10 @@ class ReluOp(Op):
         return [relu_gradient_op(node.inputs[0], output_grad)]
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_relu(input_shapes[0], tgt, tgt_host, "relu")
 
 
 class ReluGradientOp(Op):
@@ -491,10 +510,10 @@ class ReluGradientOp(Op):
         raise NotImplementedError
 
     def infer_shape(self, node, input_shapes):
-        """TODO: Your code here"""
+        return input_shapes[0]
 
     def compiled_func(self, node, input_shapes, tgt, tgt_host):
-        """TODO: Your code here"""
+        return tvm_op.make_relu_gradient(input_shapes[0], tgt, tgt_host, "relu grad")
 
 # Create global singletons of operators.
 add_op = AddOp()
@@ -535,10 +554,10 @@ class Executor(object):
         else:
             assert False, "non-CPU context not yet supported"
         self.topo_order = find_topo_sort(self.eval_node_list)
-        self.node_to_shape_map = None
-        self.node_to_arr_map = None
-        self.node_to_compiled_func = None
-        self.feed_shapes = None
+        self.node_to_shape_map = {}
+        self.node_to_arr_map = {}
+        self.node_to_compiled_func = {}
+        self.feed_shapes = {}
 
     def infer_shape(self, feed_shapes):
         """Given shapes of feed_dict nodes, infer shape for all nodes in graph.
@@ -551,7 +570,12 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
+        for node in feed_shapes:
+            self.node_to_shape_map[node] = feed_shapes[node]
+
+        for node in self.topo_order:
+            if not node in feed_shapes:
+                self.node_to_shape_map[node] = node.op.infer_shape(node, [self.node_to_shape_map[dep] for dep in node.inputs])
 
     def memory_plan(self, feed_shapes):
         """Allocates tvm.nd.array for every node except feed_dict nodes.
@@ -566,7 +590,9 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
+        for node in self.node_to_shape_map:
+            if not node in feed_shapes:
+                self.node_to_arr_map[node] = tvm.nd.empty(self.node_to_shape_map[node], ctx=self.ctx)
 
     def compile_funcs(self, feed_shapes):
         """Compile tvm ops to native code.
@@ -578,7 +604,9 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
+        for node in self.topo_order:
+            if not node in feed_shapes:
+                self.node_to_compiled_func[node] = node.op.compiled_func(node, [self.node_to_shape_map[dep] for dep in node.inputs], tgt=self.tgt, tgt_host=self.tgt_host)
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         """

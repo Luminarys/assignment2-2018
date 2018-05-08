@@ -75,10 +75,7 @@ def make_relu_gradient(shape, tgt, tgt_host, func_name, dtype="float32"):
 
 def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
                     func_name, dtype="float32"):
-    """TODO: Your code here"""
     """Hint: for tvm schedule, use split, reorder, vectorize, parallel"""
-    """Hint: debug tvm schedule using tvm.lower"""
-
     A = tvm.placeholder(shapeA, dtype=dtype, name="A")
     B = tvm.placeholder(shapeB, dtype=dtype, name="B")
 
@@ -99,7 +96,6 @@ def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
     xo, yo, xi, yi = s[C].tile(C.op.axis[0], C.op.axis[1], x_factor=32, y_factor=32)
     s[C].reorder(xo, yo, xi, yi)
     s[C].vectorize(yi)
-    #print(tvm.lower(s, [A, B], simple_mode=True))
     f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
     return f
 
