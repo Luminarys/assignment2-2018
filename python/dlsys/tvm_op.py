@@ -100,7 +100,6 @@ def make_matrix_mul(shapeA, transposeA, shapeB, transposeB, tgt, tgt_host,
     s[C].reorder(xo, yo, xi, yi)
     s[C].vectorize(yi)
     #print(tvm.lower(s, [A, B], simple_mode=True))
-    raise Exception("")
     f = tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
     return f
 
@@ -126,26 +125,37 @@ def make_conv2d(shapeX, shapeF, tgt, tgt_host, func_name, dtype="float32"):
         A[n, rc, x + rx, y + ry] * B[f, rc, rx, ry],
         axis=[rx, ry, rc]), name="C")
     s = tvm.create_schedule(C.op)
-    raise Exception("")
     return tvm.build(s, [A, B, C], tgt, target_host=tgt_host, name=func_name)
 
 
 def make_matrix_softmax(shape, tgt, tgt_host, func_name, dtype="float32"):
-    """TODO: Your code here"""
-    """Hint: use tvm.reduce_axis, tvm.sum, tvm.max, tvm.exp"""
-    """Hint: do not reuse the same reduction axis j."""
-    """Hint: implement the following version for better stability
-        e_x = np.exp(x - np.max(x))
-        softmax(x)= e_x / e_x.sum()
-    """
+    rj = tvm.reduce_axis((0, shape[1]), name="rj")
     A = tvm.placeholder(shape, dtype=dtype, name="A")
-    B = tvm.compute(shape, )
-    C = tvm.compute(shape, lambda *i: B(*i) / tvm.sum(B))
+    AI = tvm.compute((shape[0],), lambda i: tvm.max(A[i, rj], axis=rj), name="row max")
+    B = tvm.compute(shape, lambda i, j: tvm.exp(A(i, j) - AI(i)), name="e_x")
+    rj = tvm.reduce_axis((0, shape[1]), name="rj")
+    BI = tvm.compute((shape[0],), lambda i: tvm.sum(B[i, rj], axis=rj), name="row sums")
+    C = tvm.compute(shape, lambda i, j: B(i, j) / BI(i), name="e_x / e_x.sum()")
+    s = tvm.create_schedule(C.op)
+    return tvm.build(s, [A, C], tgt, target_host=tgt_host, name=func_name)
 
 def make_matrix_softmax_cross_entropy(shape, tgt, tgt_host, func_name,
                                       dtype="float32"):
-    """TODO: Your code here"""
-    """Hint: output shape should be (1,)"""
+    rj = tvm.reduce_axis((0, shape[1]), name="rj")
+    A = tvm.placeholder(shape, dtype=dtype, name="A")
+    A_ = tvm.placeholder(shape, dtype=dtype, name="A_")
+    AI = tvm.compute((shape[0],), lambda i: tvm.max(A[i, rj], axis=rj), name="row max")
+    B = tvm.compute(shape, lambda i, j: tvm.exp(A(i, j) - AI(i)), name="e_x")
+    rj = tvm.reduce_axis((0, shape[1]), name="rj")
+    BI = tvm.compute((shape[0],), lambda i: tvm.sum(B[i, rj], axis=rj), name="row sums")
+    C = tvm.compute(shape, lambda i, j: A_(i, j) * tvm.log(B(i, j) / BI(i)), name="softmax log mult")
+    rj = tvm.reduce_axis((0, shape[1]), name="rj")
+    CS = tvm.compute((shape[0],), lambda i: tvm.sum(C[i, rj], axis=rj), name="sum")
+    ri = tvm.reduce_axis((0, shape[0]), name="ri")
+    CRS = tvm.compute((1,), lambda i: tvm.sum(CS[ri], axis=ri), name="mean sum")
+    CM = tvm.compute((1,), lambda i: tvm.const(-1.0, dtype=dtype) * CRS(0) / tvm.const(shape[0], dtype=dtype), name="mean")
+    s = tvm.create_schedule(CM.op)
+    return tvm.build(s, [A, A_, CM], tgt, target_host=tgt_host, name=func_name)
 
 
 def make_reduce_sum_axis_zero(shape, tgt, tgt_host, func_name, dtype="float32"):
